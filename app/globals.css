@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: oklch(0.968 0.006 255);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.94 0.009 255);
+  --surface-3: oklch(0.905 0.011 255);
+  --border: oklch(0.88 0.012 255);
+  --ink: oklch(0.22 0.02 260);
+  --ink-soft: oklch(0.46 0.018 260);
+  --ink-faint: oklch(0.62 0.014 260);
+  --accent: oklch(0.62 0.16 42);
+  --accent-ink: oklch(0.99 0.005 60);
+  --accent-soft: oklch(0.93 0.035 42);
+  --indigo: oklch(0.4 0.09 260);
+  --indigo-soft: oklch(0.92 0.02 260);
+  --good: oklch(0.6 0.14 152);
+  --good-soft: oklch(0.93 0.045 152);
+  --warn: oklch(0.75 0.14 78);
+  --warn-soft: oklch(0.93 0.05 78);
+  --critical: oklch(0.56 0.19 18);
+  --critical-soft: oklch(0.93 0.04 18);
+  --shadow: 0 1px 2px oklch(0.2 0.02 260 / 0.06), 0 8px 24px oklch(0.2 0.02 260 / 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(0.19 0.014 260);
+    --surface: oklch(0.235 0.016 260);
+    --surface-2: oklch(0.28 0.018 260);
+    --surface-3: oklch(0.33 0.02 260);
+    --border: oklch(0.36 0.02 260);
+    --ink: oklch(0.94 0.006 260);
+    --ink-soft: oklch(0.78 0.012 260);
+    --ink-faint: oklch(0.6 0.014 260);
+    --accent: oklch(0.72 0.15 44);
+    --accent-ink: oklch(0.16 0.02 40);
+    --accent-soft: oklch(0.32 0.05 42);
+    --indigo: oklch(0.72 0.07 258);
+    --indigo-soft: oklch(0.3 0.035 260);
+    --good: oklch(0.72 0.14 152);
+    --good-soft: oklch(0.3 0.05 152);
+    --warn: oklch(0.8 0.13 80);
+    --warn-soft: oklch(0.32 0.06 78);
+    --critical: oklch(0.68 0.17 20);
+    --critical-soft: oklch(0.33 0.06 18);
+    --shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 12px 28px oklch(0 0 0 / 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: oklch(0.19 0.014 260);
+  --surface: oklch(0.235 0.016 260);
+  --surface-2: oklch(0.28 0.018 260);
+  --surface-3: oklch(0.33 0.02 260);
+  --border: oklch(0.36 0.02 260);
+  --ink: oklch(0.94 0.006 260);
+  --ink-soft: oklch(0.78 0.012 260);
+  --ink-faint: oklch(0.6 0.014 260);
+  --accent: oklch(0.72 0.15 44);
+  --accent-ink: oklch(0.16 0.02 40);
+  --accent-soft: oklch(0.32 0.05 42);
+  --indigo: oklch(0.72 0.07 258);
+  --indigo-soft: oklch(0.3 0.035 260);
+  --good: oklch(0.72 0.14 152);
+  --good-soft: oklch(0.3 0.05 152);
+  --warn: oklch(0.8 0.13 80);
+  --warn-soft: oklch(0.32 0.06 78);
+  --critical: oklch(0.68 0.17 20);
+  --critical-soft: oklch(0.33 0.06 18);
+  --shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 12px 28px oklch(0 0 0 / 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  min-height: 100dvh;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/*
+ * RTL support (Hebrew). Two things happen automatically once <html dir="rtl">
+ * is set (see app/layout.tsx): the browser mirrors every default-direction
+ * flexbox row (almost everything in this app — cards, list rows, the tab
+ * bar — is a plain `flex` with no explicit direction) and flips default
+ * text alignment, with no CSS needed. What does need explicit handling:
+ * swapping in a Hebrew-capable font, and the handful of components that use
+ * *physical* left/right positioning (an absolutely-placed back button, a
+ * badge pinned to a corner) — those use the ltr:/rtl: Tailwind variants at
+ * their own call sites instead of being fixed here.
+ */
+html[dir="rtl"] body {
+  font-family: var(--font-hebrew), var(--font-body);
+}
+html[dir="rtl"] h1,
+html[dir="rtl"] h2,
+html[dir="rtl"] h3,
+html[dir="rtl"] h4 {
+  font-family: var(--font-hebrew), var(--font-display);
+}
+/* Hebrew has no italic tradition the way Latin does — Newsreader's italic
+   treatment (used for a couple of emphasis spots) would otherwise apply a
+   synthetic slant to Hebrew glyphs, which reads as broken, not stylish. */
+html[dir="rtl"] em,
+html[dir="rtl"] i {
+  font-style: normal;
+}
+/* Numbers and dates stay LTR even inside an RTL paragraph — "15:00–18:00"
+   or "Day 12 of 30" reversing digit order would be actively confusing. */
+html[dir="rtl"] time,
+html[dir="rtl"] .ltr-nums {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
