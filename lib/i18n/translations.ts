@@ -202,8 +202,18 @@ export function optionNLabel(locale: Locale, n: number): string {
   return locale === "he" ? `אפשרות ${n}` : `Option ${n}`;
 }
 
-export function unsafeForLabel(locale: Locale, name: string, reason: string): string {
-  return locale === "he" ? `לא בטוח עבור ${name}: ${reason}` : `Unsafe for ${name}: ${reason}`;
+// `reason` is typed optional here because MemberMatch.unsafeReason
+// (lib/food/match.ts) is `string | undefined` at the type level — in
+// practice every `safe: false` branch in checkSafety() does set a reason,
+// but TypeScript can't narrow that invariant through the object literal, so
+// tsc correctly flags a plain `string` param as unsound. Handled with a
+// real (if generic) fallback rather than `?? ""`, which would silently
+// render "Unsafe for Danny: " with nothing after the colon if this ever did
+// happen — a visibly broken safety message is worse than a slightly
+// generic one.
+export function unsafeForLabel(locale: Locale, name: string, reason: string | undefined): string {
+  const why = reason ?? (locale === "he" ? "לא מתאים" : "not a safe match");
+  return locale === "he" ? `לא בטוח עבור ${name}: ${why}` : `Unsafe for ${name}: ${why}`;
 }
 
 export function daysUntilStartLabel(locale: Locale, days: number): string {

@@ -822,6 +822,41 @@ change; touch targets were spot-checked too (the `TabBar`'s four tabs are each r
 by 55px tall in a max-width mobile layout, comfortably over both Apple's 44pt and Material's 48dp
 minimums).
 
+## What's new: Real `tsc` Errors, Fixed
+
+Everything up to this point was checked with the syntax-only parser this sandbox has always had
+to rely on (see "A note on verification" below) — it catches malformed JavaScript/TypeScript
+syntax but not actual type mismatches, since that needs `node_modules` this sandbox can't install.
+The user ran the real `npx tsc --noEmit` locally against the phase9 delivery and reported back 5
+genuine type errors it caught that the syntax checker structurally cannot. All five are fixed:
+
+- **`app/t/[tripId]/food/page.tsx`** — `MemberMatch.unsafeReason` (`lib/food/match.ts`) is
+  `string | undefined`, but `unsafeForLabel` (`lib/i18n/translations.ts`) required a plain
+  `string`. In practice every `safe: false` branch in `checkSafety()` does set a reason, but
+  TypeScript can't narrow that invariant through the object literal — so this is a real (if
+  narrow) unsoundness, not a false positive. Fixed by widening `unsafeForLabel`'s parameter to
+  `string | undefined` with a real fallback string ("not a safe match" / "לא מתאים") if it's ever
+  missing, rather than `?? ""`, which would have silently rendered "Unsafe for Danny: " with
+  nothing after the colon in that case — a visibly broken message is worse than a generic one.
+- **`lib/ai/anthropicParser.ts` (two errors) and `lib/ai/enrichPlace.ts`** — both files cast the
+  *request* body loosely before calling `client.messages.create()` (the SDK's exact nested tool-
+  schema type names have shifted across versions, and only the wire shape matters here), but that
+  cast erases the argument type overload resolution depends on, so tsc widened the awaited
+  *response* to `Stream<RawMessageStreamEvent> | Message` instead of the plain `Message` these
+  calls actually return (neither ever passes `stream: true`) — and `.stop_reason`/`.content` don't
+  exist on the streaming half of that union. Fixed by explicitly casting the awaited response to
+  `Anthropic.Messages.Message` in both files, which is what these calls actually return, not a
+  workaround.
+- **`lib/ai/anthropicParser.ts`** — `parsedTripSchema` (`lib/ai/schema.ts`) deliberately has no
+  `source` field on its item shape (that's bookkeeping about *where* a value came from, not
+  something to ask the model to decide about its own output), so the zod-inferred
+  `ParsedTripFromAI` doesn't structurally satisfy `ParsedItem`'s required `source: "organizer_input"
+  | "ai_parsed"` (`lib/parsing-types.ts`) — a real gap, since `anthropicParseItinerary` was
+  returning `result.data` directly as `ParsedTrip`. Fixed by mapping every item to attach `source:
+  "ai_parsed"` before returning, the same literal `lib/ai/heuristicParser.ts`'s offline path
+  already stamps at the point each item is built (checked, and unaffected — it doesn't go through
+  this schema).
+
 ## A note on verification
 
 This was built in a sandboxed environment whose network egress does not currently

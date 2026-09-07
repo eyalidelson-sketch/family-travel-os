@@ -76,7 +76,14 @@ export async function enrichPlaceWithClaude(place: Place): Promise<EnrichmentFro
   if (!client) return null;
 
   const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
-  const response = await client.messages.create(
+  // See the matching comment in lib/ai/anthropicParser.ts's anthropicParseItinerary:
+  // the request cast below erases the argument type overload resolution
+  // depends on, so the awaited response also needs its own explicit cast to
+  // the non-streaming Message type — without it tsc widens `response` to
+  // `Stream<RawMessageStreamEvent> | Message` and `.content` doesn't exist
+  // on the streaming half. This call never passes `stream: true`, so the
+  // plain Message type is accurate here, not a workaround.
+  const response = (await client.messages.create(
     {
       model,
       max_tokens: 1536,
@@ -96,7 +103,7 @@ export async function enrichPlaceWithClaude(place: Place): Promise<EnrichmentFro
       ],
       tool_choice: { type: "tool", name: TOOL_NAME }
     } as unknown as Parameters<typeof client.messages.create>[0]
-  );
+  )) as Anthropic.Messages.Message;
 
   const content = response.content as Array<{ type: string; name?: string; input?: unknown }>;
   const toolUse = content.find((block) => block.type === "tool_use" && block.name === TOOL_NAME);

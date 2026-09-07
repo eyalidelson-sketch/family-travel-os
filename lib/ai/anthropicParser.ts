@@ -125,7 +125,7 @@ export async function anthropicParseItinerary(rawText: string): Promise<ParsedTr
   // Cast the request body loosely: the exact nested type names for tool
   // schemas have shifted across SDK versions, and the wire shape (snake_case
   // fields matching the public API) is what actually matters here.
-  const response = await client.messages.create({
+  const response = (await client.messages.create({
     model,
     // Real documents (a multi-week, multi-city, table-heavy Word/PDF export)
     // can need a genuinely large structured-output payload — 15-20 days,
@@ -152,7 +152,15 @@ export async function anthropicParseItinerary(rawText: string): Promise<ParsedTr
       }
     ],
     tool_choice: { type: "tool", name: TOOL_NAME }
-  } as unknown as Parameters<typeof client.messages.create>[0]);
+  } as unknown as Parameters<typeof client.messages.create>[0])) as Anthropic.Messages.Message;
+  // The request body above is cast loosely (see the comment before it), which
+  // erases the argument type overload resolution depends on — without a
+  // matching cast on the AWAITED response, tsc widens it to
+  // `Stream<RawMessageStreamEvent> | Message` (the streaming/non-streaming
+  // union) instead of the plain `Message` this call actually returns (no
+  // `stream: true` is ever passed), and `.stop_reason`/`.content` below don't
+  // exist on the streaming half of that union. This call never streams, so
+  // asserting the non-streaming `Message` type is accurate, not a workaround.
 
   if (response.stop_reason === "max_tokens") {
     console.error(
@@ -170,5 +178,22 @@ export async function anthropicParseItinerary(rawText: string): Promise<ParsedTr
     console.error("Claude itinerary output failed validation:", result.error.flatten());
     return null;
   }
-  return result.data;
+
+  // parsedTripSchema (lib/ai/schema.ts) intentionally has no "source" field
+  // on its item shape — that's bookkeeping about WHERE a value came from,
+  // not something we ask the model to decide about its own output. Every
+  // item here came from this Claude call, so it's "ai_parsed" by
+  // definition; the offline heuristic parser (lib/ai/heuristicParser.ts)
+  // stamps the same literal at the point each item is built, for the same
+  // reason. Stamping it here is what makes `result.data` (typed
+  // ParsedTripFromAI, missing "source") actually satisfy this function's
+  // declared ParsedTrip return type, not just a cast to paper over it.
+  const trip: ParsedTrip = {
+    ...result.data,
+    days: result.data.days.map((day) => ({
+      ...day,
+      items: day.items.map((item) => ({ ...item, source: "ai_parsed" as const }))
+    }))
+  };
+  return trip;
 }
