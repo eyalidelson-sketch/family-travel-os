@@ -11,6 +11,58 @@ Everything in this app already degrades gracefully with nothing configured
 locally. It's required once you want a link you can send to family members
 that still works tomorrow.
 
+## Quick start — go live today, no coding required
+
+**Why this can't just happen automatically:** the sandbox this app was built in has no outbound
+internet access at all (it can't reach `npm`'s package registry, Vercel's servers, or even
+Wikipedia — every request from it gets refused). So this file can prepare everything, but the
+actual "click deploy" step has to happen on a real computer with real internet: GitHub's and
+Vercel's own servers do the `npm install`/build, which sidesteps the sandbox limitation entirely.
+None of the steps below need coding — it's about 10 minutes of clicking, once.
+
+The project folder you were given already has a git repository initialized and committed
+(`git log` shows one commit, "Family Travel OS — ready to deploy") — you're pushing that as-is,
+not starting from scratch.
+
+1. **Get the code onto GitHub** (free, ~2 min if you don't have an account yet — sign up at
+   [github.com](https://github.com)). Create a new **empty** repository (no README, no
+   `.gitignore` — this project already has both), then from a terminal inside the unzipped project
+   folder:
+   ```
+   git remote add origin https://github.com/<your-username>/<your-repo-name>.git
+   git branch -M main
+   git push -u origin main
+   ```
+   No terminal handy? [GitHub Desktop](https://desktop.github.com) does the same thing by pointing
+   it at the unzipped folder and clicking "Publish repository" — no commands needed.
+
+2. **Create a free Supabase project** (~3 min, at [supabase.com](https://supabase.com) — this is
+   the real database; skipping it means trips can vanish between visits on a serverless host, see
+   "Why this order" below). Once the project is created:
+   - Open its **SQL Editor**, paste in the entire contents of this project's `db/schema.sql`, and
+     run it once.
+   - Open **Settings → API** and copy the **Project URL** and the **`service_role` secret key**
+     (not the `anon`/`public` one).
+
+3. **Import the repo on Vercel** (~2 min, free, at [vercel.com/new](https://vercel.com/new) — sign
+   in with the same GitHub account). Vercel auto-detects this as a Next.js project; no build
+   settings need changing. Before clicking Deploy, open **Environment Variables** and add:
+   - `SUPABASE_URL` — the Project URL from step 2
+   - `SUPABASE_SERVICE_ROLE_KEY` — the service_role key from step 2
+   - `UNSPLASH_ACCESS_KEY` — already generated for this project; copy it from the delivered
+     project's own `.env.local` file (not committed to git, so it isn't in the GitHub repo — copy
+     it from the zip you were sent)
+   - Optionally `ANTHROPIC_API_KEY` (see "API keys" further down for what it upgrades — parsing
+     quality and place write-ups, not required for the app to work)
+
+4. **Click Deploy.** Two to three minutes later you get a live `https://<something>.vercel.app`
+   URL — open it on a phone and "Add to Home Screen" for a real app-like icon (the manifest/viewport
+   setup for that is already in place, see `app/layout.tsx`). That link is what you send family —
+   it keeps working regardless of whether this sandbox session is still open.
+
+Everything past this point is background on *why* each piece matters, plus the same database/keys
+steps in more depth if anything above needs more context.
+
 ## Why this order
 
 1. **Database first.** Right now the app stores everything — trips, places,

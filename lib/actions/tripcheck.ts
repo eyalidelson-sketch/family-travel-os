@@ -42,8 +42,15 @@ export async function applyTripCheckFixAction(tripId: string, issue: TripCheckIs
     }
 
     await repo.dismissRecommendation(tripId, issue.id, "trip_check_issue", actorId);
+    // The fix itself may have added/changed an itinerary item (see the
+    // switch above), which Full Trip and the Route Map also derive from
+    // (lib/trip-blocks.ts, lib/map/waypoints.ts) — revalidate all four tabs
+    // that read itinerary state, same as lib/actions/itinerary.ts's own
+    // mutations, not just the two this action happens to render itself.
     revalidatePath(`/t/${tripId}/check`);
     revalidatePath(`/t/${tripId}/today`);
+    revalidatePath(`/t/${tripId}/trip`);
+    revalidatePath(`/t/${tripId}/map`);
     return {};
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Couldn't apply that fix." };

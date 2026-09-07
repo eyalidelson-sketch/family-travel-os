@@ -616,7 +616,7 @@ already goes through. But every method in it just threw `"not implemented yet"`,
 setting `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` before this pass would have broken the entire
 app rather than making it real. This pass:
 
-- **Implemented all 22 `TripRepository` methods** in `lib/repo/supabase.ts` against
+- **Implemented all 24 `TripRepository` methods** in `lib/repo/supabase.ts` against
   `@supabase/supabase-js`, mirroring `lib/repo/memory.ts`'s exact business logic — invite-code
   generation with a uniqueness check against the real table, the chicken-and-egg
   trip/trip_member insert order the schema's own FK comment describes, day insert/delete with
@@ -753,6 +753,75 @@ deleted, since `lib/map/waypoints.ts`'s shared `RouteMapStopInput` type is still
 - New dependencies: `leaflet`, `react-leaflet` (pinned to `4.2.1`, the last major compatible with
   React 18/Next 14 — v5 requires React 19), and `@types/leaflet`.
 
+## What's new: Full Feature Audit — Polls, Dynamic Replanning, Supabase Serialization, Mobile/PWA
+
+A line-by-line audit across four systems, requested before the live deployment: polls/voting,
+itinerary editing (add/update/delete/move/reorder items, add/delete days), the Supabase
+repository's serialization of all of it, and mobile/PWA readiness. Two real issues turned up; the
+rest of what was checked was already correct.
+
+### 1. Polls & Supabase serialization: no bugs found
+
+`Poll`/`PollOption`/`PollVote` (`lib/types.ts`) match `db/schema.sql`'s `polls`/`poll_options`/
+`poll_votes` columns exactly, `lib/repo/memory.ts` and `lib/repo/supabase.ts` implement
+`createPoll`/`listPolls`/`getPoll`/`castVote`/`closePoll` with identical cast-or-change voting
+semantics (a member's second vote updates their first rather than adding a row, matching
+`poll_votes`'s `unique(poll_id, trip_member_id)` constraint), and `PollCard`/`CreatePollForm`
+consume `PollWithResults` the same way regardless of which repository produced it. Likewise for
+itinerary editing: `addItineraryItem`/`updateItineraryItem`/`deleteItineraryItem`/
+`moveItineraryItem`/`addDayAfter`/`deleteDay` were compared method-by-method between both
+repositories (including the place-name-to-`Place`-id resolution in `updateItineraryItem`, and the
+shift-highest/lowest-first ordering `addDayAfter`/`deleteDay` use to avoid transient
+`unique(trip_id, date)` collisions) — the two implementations agree in every case checked.
+`lib/repo/supabasePlaceRepo.ts`'s enrichment read/write also checked out: `practical_info`/
+`practical_info_he` are `jsonb` columns and supabase-js serializes/deserializes plain JS objects
+into them with no manual `JSON.stringify` needed, so `PlaceEnrichmentPracticalInfo` round-trips
+correctly. One doc-only correction along the way: the README and `DEPLOYMENT.md` said "22
+`TripRepository` methods" in two places — the interface actually has 24 (the count was never
+updated after the poll methods were added in an earlier pass); both mentions now say 24. No
+functional change, just an inaccurate number.
+
+### 2. A real gap: editing from one tab didn't refresh another tab's cached view
+
+`lib/actions/itinerary.ts`'s mutations (and `lib/actions/tripcheck.ts`'s `applyTripCheckFixAction`,
+which also calls `repo.addItineraryItem`/`updateItineraryItem` directly for its structured fixes)
+only ever called `revalidatePath` for the tab they render themselves — Today, or Today plus Full
+Trip for add/delete-day. But the Route Map (`lib/map/waypoints.ts`) and Trip Check both derive
+their own view from the same itinerary items and days. Every one of these tabs is already
+dynamically rendered per-request (each reads the viewer's session cookie, which opts a Next.js
+Server Component out of static rendering), so the *server* data was never actually stale — but
+Next's client-side Router Cache still holds each visited tab's last-rendered payload for up to 30
+seconds, and only an explicit `revalidatePath` clears a specific entry immediately. Concretely: if
+you'd looked at the Map tab, then reordered an item on Today, then tapped back to Map within that
+30-second window, you could see the Map tab's pre-edit state. Fixed by having every itinerary/day
+mutation revalidate all four dependent tabs (`today`, `trip`, `map`, `check`) — see
+`revalidateDerivedTabs()` in `lib/actions/itinerary.ts` and the equivalent calls added to
+`applyTripCheckFixAction`. This was never a data-loss or crash risk (the underlying data was
+always correct, and a manual refresh or the 30-second window clearing on its own would have shown
+it) — just a real, fixable staleness window worth closing before family members are relying on
+these tabs staying in sync with each other in real time.
+
+### 3. A real gap: no PWA/home-screen icon
+
+`app/manifest.ts` had `icons: []` — a manifest Next.js happily served, but with nothing for
+"Add to Home Screen" to actually show: Android falls back to a generic screenshot-crop or blank
+tile with no real icon set, and there was no `app/apple-icon.png` for iOS's Home Screen bookmark
+either (Next's App Router auto-detects a file literally named `apple-icon.png`/`icon.png` inside
+`app/` and injects the right `<link>` tags — no manual metadata needed, but the files themselves
+have to exist). Added three real PNGs (`public/icons/icon-192.png`, `icon-512.png`,
+`maskable-512.png`, generated from a simple "T" monogram in the app's own navy/amber palette — no
+external asset needed) wired into `manifest.ts`'s `icons` array, an `any`-purpose 192 and 512 for
+the normal home-screen icon plus a dedicated maskable 512 whose glyph sits inside the safe zone
+Android crops maskable icons to, and `app/apple-icon.png` (180×180, Apple's documented ideal size)
+plus `app/icon.png` for the browser-tab favicon, both picked up automatically by Next's file
+convention. The rest of the mobile/PWA setup — `viewport` (device-width, `maximumScale: 1`,
+`viewportFit: "cover"` for the iPhone notch/home-indicator safe areas), `appleWebApp: { capable:
+true }`, and every screen's own safe-area padding (`env(safe-area-inset-bottom)` on the fixed
+`TabBar`, `env(safe-area-inset-top)` on sticky headers) — was already correct and needed no
+change; touch targets were spot-checked too (the `TabBar`'s four tabs are each roughly 110px wide
+by 55px tall in a max-width mobile layout, comfortably over both Apple's 44pt and Material's 48dp
+minimums).
+
 ## A note on verification
 
 This was built in a sandboxed environment whose network egress does not currently
@@ -760,7 +829,7 @@ allow `registry.npmjs.org` (or any other outbound host — a direct `curl` to
 `en.wikipedia.org` from this sandbox also fails), so `npm install` / `npm run build` could not be
 run here, and neither the Wikipedia calls nor the OpenStreetMap tile loading in this pass could be
 exercised live. Every file was still reviewed carefully by hand, cross-checked so every repository
-method (22 of them, across both the in-memory and Supabase implementations) has the exact same
+method (24 of them, across both the in-memory and Supabase implementations) has the exact same
 signature in the interface and both implementations, and a TypeScript syntax-only parse pass (no
 type resolution, since that needs `node_modules`) came back clean across all 99 source files, up
 from 96 in the Going Live pass, 95 in the Critical & Final Fix pass, 90 in the Combined Pass, 87 in
